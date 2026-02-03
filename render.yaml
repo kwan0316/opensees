@@ -2,6 +2,7 @@ services:
   - type: web
     name: opensees
     env: python
+    pythonVersion: 3.10.12
     plan: free
     branch: main
     buildCommand: pip install -r requirements.txt
