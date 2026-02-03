@@ -16,8 +16,14 @@ import matplotlib.pyplot as plt
 import base64
 import io
 import openseespy.opensees as ops
-import opstool as opst
-import opstool.vis.pyvista as opsvis
+
+# Import opstool post-processing only (avoid GUI dependencies like tkinter)
+try:
+    import opstool.post as opst_post
+    OPSTOOL_AVAILABLE = True
+except ImportError:
+    OPSTOOL_AVAILABLE = False
+    opst_post = None
 
 app = FastAPI(
     title="2D Frame Analysis API",
@@ -161,8 +167,13 @@ def create_model(request: AnalysisRequest):
 
 def run_static_analysis(num_points: int = 11):
     """Run static analysis with opstool ODB recording"""
-    # Create ODB before analysis (opstool requirement)
-    odb = opst.post.CreateODB(odb_tag="analysis", interpolate_beam_disp=num_points)
+    # Create ODB before analysis (opstool requirement) if available
+    odb = None
+    if OPSTOOL_AVAILABLE:
+        try:
+            odb = opst_post.CreateODB(odb_tag="analysis", interpolate_beam_disp=num_points)
+        except:
+            odb = None
     
     # Set up analysis
     ops.system("BandGeneral")
@@ -178,9 +189,13 @@ def run_static_analysis(num_points: int = 11):
     if result != 0:
         raise RuntimeError("Analysis failed to converge")
     
-    # Fetch and save response (must be done after analyze)
-    odb.fetch_response_step()
-    odb.save_response()
+    # Fetch and save response (must be done after analyze) if ODB exists
+    if odb is not None:
+        try:
+            odb.fetch_response_step()
+            odb.save_response()
+        except:
+            pass
     
     return odb
 
@@ -209,16 +224,12 @@ def get_nodal_displacements(node_ids: List[int]) -> Dict:
 
 def get_element_forces_using_opstool(element_ids: List[int], num_points: int = 11) -> Dict:
     """Get V, N, M for elements using opstool post-processing"""
+    if not OPSTOOL_AVAILABLE:
+        raise ImportError("opstool not available")
+    
     try:
-        # Create ODB for post-processing (must be done before analysis)
-        # But since analysis is already done, we need to recreate the model state
-        # For now, we'll use a simpler approach - create ODB after analysis
-        odb = opst.post.CreateODB(odb_tag="analysis", interpolate_beam_disp=num_points)
-        odb.fetch_response_step()
-        odb.save_response()
-        
-        # Get element responses
-        ele_resp = opst.post.get_element_responses(odb_tag="analysis", ele_type="Frame")
+        # Get element responses from existing ODB
+        ele_resp = opst_post.get_element_responses(odb_tag="analysis", ele_type="Frame")
         ele_forces = ele_resp["sectionForces"]
         
         forces = {}
@@ -434,7 +445,7 @@ async def analyze_frame(request: AnalysisRequest):
         
         # Create and run analysis
         create_model(request)
-        odb = run_static_analysis(num_points=11)
+        run_static_analysis(num_points=11)
         
         # Get all node IDs and element IDs
         node_ids = [node.id for node in request.nodes]
@@ -505,6 +516,7 @@ async def analyze_frame(request: AnalysisRequest):
             ops.wipe()
         except:
             pass
+
 
 
 
