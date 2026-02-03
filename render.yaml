@@ -2,7 +2,9 @@ services:
   - type: web
     name: frame-analysis-api
     env: python
-    pythonVersion: 3.10.12
     buildCommand: pip install --upgrade pip setuptools wheel && pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --workers 1
-    plan: free  #
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10.12
+    plan: free  
