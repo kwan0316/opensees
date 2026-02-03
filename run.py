@@ -11,10 +11,11 @@ if __name__ == "__main__":
     reload = os.environ.get("ENV", "production") == "development"
     
     uvicorn.run(
-        "app:app",
+        "main:app",
         host="0.0.0.0",
         port=port,
         reload=reload,
         log_level="info"
     )
+
 
